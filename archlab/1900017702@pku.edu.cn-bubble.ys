@@ -1,0 +1,62 @@
+# 1900017702  ZhuYue
+# Execution begins at address 0 
+	.pos 0
+	irmovq stack, %rsp  	# Set up stack pointer
+	call main		# Execute main program
+	halt			# Terminate program 
+
+#Sample
+.align 8
+Array:
+	.quad 0xbca
+	.quad 0xcba
+	.quad 0xacb
+	.quad 0xcab
+	.quad 0xabc
+	.quad 0xbac
+
+
+main:	irmovq Array,%rdi	# Array in rdi
+	irmovq $40,%rsi		# 40 in rsi
+	call bubble_sort	# bubble_sort(Array,6)
+	ret
+
+# long bubble_sort(long* data, long count)
+# data in rdi. last in rdx, i in rbx
+bubble_sort:
+	rrmovq %rdi,%rdx
+	addq %rsi,%rdx		# last = 40 + data
+	irmovq $8,%r9		# 8 in r9
+firstfor:
+	subq %rdi,%rdx		# last - data
+	je endfor			# last > data?
+	addq %rdi,%rdx
+
+	rrmovq %rdi,%rbx		# i = data
+secondfor:
+	subq %rdx,%rbx		# i - last
+	jge finishsecond		# i >= last?
+	addq %rdx,%rbx		# reset i
+
+	mrmovq 8(%rbx), %r10	# *(i+1) in r10
+	mrmovq (%rbx), %r11	# *i in r11
+	subq %r10,%r11		# *i - *(i+1)
+	jle breaksecond		# *i <= *(i+1)?
+	addq %r10,%r11
+	rmmovq %r10,(%rbx)
+	rmmovq %r11,8(%rbx)
+breaksecond:
+
+	addq %r9,%rbx		# i++
+	jmp secondfor
+
+finishsecond:
+	subq %r9,%rdx		# last--
+	jmp firstfor
+endfor:
+	ret
+
+
+# Stack starts here and grows to lower addresses
+	.pos 0x200
+stack:

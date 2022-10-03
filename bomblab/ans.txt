@@ -1,0 +1,6 @@
+phase1：查看栈中存放的内容
+phase2：斐波那契数列
+phase3：跳转值
+phase4：递归，直接用调试看答案
+phase5：字符ASCIImod7对应到表，四个相乘为0x20
+phase6：链表，排序

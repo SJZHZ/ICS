@@ -1,0 +1,241 @@
+#/* $begin ncopy-ys */
+##################################################################
+# ncopy.ys - Copy a src block of len words to dst.
+# Return the number of positive words (>0) contained in src.
+#
+# Include your name and ID here.
+
+# ZhuYue 1900017702
+
+# Describe how and why you modified the baseline code.
+
+# 1: unrolling loop by 9 steps
+# 1: how步长为9的循环展开
+# why消除了指针和循环自变量的多次加减，还可以消除/减少取内存的bubble
+
+# 2: using switch and inlining instead of loop
+# 2: how把余数（小于9）的层数也展开，使用switch跳转表跳转（取最大值8，作8层展开，按需要跳转）
+# why同上
+# 0-8共九个数，跳转就要作拆分
+# 使用条件跳转，可以大于小于等于，故每次拆分得到小于部分、等于部分、大于部分
+# 调整顺序：
+# 由于数据小的样例“权重”大，所以小的优先判断
+# 由于可能性多的部分权重大，所以可能性多的先判断
+# 确切的结论还需要实践得到
+# 由于“等于”只有一个，所以等于部分最后跳转
+
+# 3: other inlining
+# 3: 细节优化（作用不大，0.02左右，但是用了比较多空间）
+# 等于0的部分不需要跳转到Done，直接ret
+# 我的划分中，正好在等于4的部分，需要重新设置条件码并跳转到case 4
+# 我就再进行了一次内联：case 4s，不仅可以省去设置条件码，还能去掉气泡（确定步长的展开，和1同理）
+# 结果发现字数超了一点点，没办法只好把case 4s的最后一段，重新跳回case 1
+# 节省了case 1的字数，但增加了一次【可能的】跳转
+# 说是“可能”的原因是：每次中途跳转都从case ks（副轨道）跳入case k（正轨道）的后面
+
+# 4: correcting
+# 订正：一开始我跳出循环是按照C的思维，在每次开头判断是否结束循环，感觉这样更节省空间
+# 但是实际上在尾部判断更好，如果要跳出可以自然往下走就跳出了
+
+# 最后卡在991字节完成，平均CPE 7.46
+
+
+##################################################################
+# Do not modify this portion
+# Function prologue.
+# %rdi = src, %rsi = dst, %rdx = len
+ncopy:
+
+##################################################################
+# You can modify this portion
+
+
+	# Loop header
+
+
+Judge:
+	iaddq $-9,%rdx		# len - 9
+	jl Switchpre
+Loop:
+	mrmovq (%rdi), %r10	# read val from src
+	mrmovq 8(%rdi), %r9	# read val from src
+	mrmovq 16(%rdi), %rbx	# read val from src
+	mrmovq 24(%rdi), %rcx	# read val from src
+	rmmovq %r10, (%rsi)	# ...and store it to dst
+	rmmovq %r9, 8(%rsi)	# ...and store it to dst
+	rmmovq %rbx, 16(%rsi)	# ...and store it to dst
+	rmmovq %rcx, 24(%rsi)	# ...and store it to dst
+
+	andq %r10, %r10		# val <= 0?	
+	jle Firstskip		# if so, goto Firstskip:
+	iaddq $1,%rax
+Firstskip:
+	andq %r9, %r9		# val <= 0?
+	jle Secondskip		# if so, goto Secondskip:
+	iaddq $1,%rax		# count++
+Secondskip:
+	andq %rbx, %rbx		# val <= 0?
+	jle Thirdskip		# if so, goto Thirdskip:
+	iaddq $1,%rax
+Thirdskip:
+	andq %rcx, %rcx		# val <= 0?
+	jle Forthskip		# if so, goto Forthskip:
+	iaddq $1,%rax		# count++
+Forthskip:
+
+LOOP2:	mrmovq 32(%rdi), %r10	# read val from src
+	mrmovq 40(%rdi), %r9	# read val from src
+	mrmovq 48(%rdi), %rbx	# read val from src
+	mrmovq 56(%rdi), %rcx	# read val from src
+	mrmovq 64(%rdi), %r11
+	rmmovq %r10, 32(%rsi)	# ...and store it to dst
+	rmmovq %r9, 40(%rsi)	# ...and store it to dst
+	rmmovq %rbx, 48(%rsi)	# ...and store it to dst
+	rmmovq %rcx, 56(%rsi)	# ...and store it to dst
+	rmmovq %r11, 64(%rsi)
+
+	andq %r10, %r10		# val <= 0?	
+	jle Firstskip2		# if so, goto Firstskip:
+	iaddq $1,%rax
+Firstskip2:
+	andq %r9, %r9		# val <= 0?
+	jle Secondskip2		# if so, goto Secondskip:
+	iaddq $1,%rax		# count++
+Secondskip2:
+	andq %rbx, %rbx		# val <= 0?
+	jle Thirdskip2		# if so, goto Thirdskip:
+	iaddq $1,%rax
+Thirdskip2:
+	andq %rcx, %rcx		# val <= 0?
+	jle Forthskip2		# if so, goto Forthskip:
+	iaddq $1,%rax		# count++
+Forthskip2:
+	andq %r11, %r11		# val <= 0?
+	jle Fifthskip2		# if so, goto Forthskip:
+	iaddq $1,%rax		# count++
+Fifthskip2:
+	iaddq $72,%rdi
+	iaddq $72,%rsi
+	iaddq $-9,%rdx
+	jge Loop
+				#  0      1      2  3  4  5  6  7  8
+				# now at R - 9
+				# -9     -8     -7 -6 -5 -4 -3 -2 -1
+				# -1      0      1  2  3  4  5  6  7
+				#  Done   Equal1    More1
+Switchpre:
+	iaddq $8,%rdx
+	jg More1
+	je Equal1
+	ret
+				#  2  3  4    5    6 7 8
+				#  1  2  3    4    5 6 7
+				# -3 -2 -1    0    1 2 3
+				# L5M1     Equal5   More5
+More1:
+	iaddq $-4,%rdx
+	jl Less5More1
+	jg More5
+	jmp Equal5
+Less5More1:
+	iaddq $2,%rdx		# -1 0 1
+	jl Equal2
+	je Equal3
+
+	#iaddq $-1,%rdx
+	#jmp Equal4
+Equal4p:				# inlining
+	mrmovq 24(%rdi),%r11
+	mrmovq 16(%rdi),%r10	# kill bubble
+	rmmovq %r11,24(%rsi)
+	andq %r11,%r11
+	jle SSkip4
+	iaddq $1,%rax
+
+	mrmovq 8(%rdi),%r9
+	rmmovq %r10,16(%rsi)
+	andq %r10,%r10
+	jle SSkip3
+	iaddq $1,%rax
+	rmmovq %r9,8(%rsi)
+	andq %r9,%r9
+
+	jmp Equal1		# space limited
+
+
+More5:
+	iaddq $-2, %rdx		# -1 0 1
+	jl Equal6
+	je Equal7
+					# every phase should set 1 for "less or equal"
+					# but Equal8 doesn't need this
+
+Equal8:	mrmovq 56(%rdi),%rbx
+	rmmovq %rbx,56(%rsi)
+	andq %rbx,%rbx
+					#delay judge for killing next bubble
+Equal7: mrmovq 48(%rdi),%r14
+	jle SSkip8
+	iaddq $1,%rax
+SSkip8:
+	rmmovq %r14,48(%rsi)
+	andq %r14,%r14	
+
+Equal6: mrmovq 40(%rdi),%r13
+	jle SSkip7
+	iaddq $1,%rax
+SSkip7:
+	rmmovq %r13,40(%rsi)
+	andq %r13,%r13
+
+Equal5: mrmovq 32(%rdi),%r12
+	jle SSkip6
+	iaddq $1,%rax
+SSkip6:
+	rmmovq %r12,32(%rsi)
+	andq %r12,%r12
+
+Equal4:	mrmovq 24(%rdi),%r11
+	jle SSkip5
+	iaddq $1,%rax
+SSkip5:
+	rmmovq %r11,24(%rsi)
+	andq %r11,%r11
+
+Equal3: mrmovq 16(%rdi),%r10
+	jle SSkip4
+	iaddq $1,%rax
+SSkip4:
+	rmmovq %r10,16(%rsi)
+	andq %r10,%r10
+
+
+Equal2: mrmovq 8(%rdi),%r9
+	jle SSkip3
+	iaddq $1,%rax
+SSkip3:
+	rmmovq %r9,8(%rsi)
+	andq %r9,%r9
+
+
+Equal1:	mrmovq (%rdi),%r8
+	jle SSkip2
+	iaddq $1,%rax
+SSkip2:
+	rmmovq %r8,(%rsi)
+	andq %r8,%r8
+	jle Done
+	iaddq $1,%rax
+
+
+
+
+##################################################################
+# Do not modify the following section of code
+# Function epilogue.
+Done:
+	ret
+##################################################################
+# Keep the following label at the end of your function
+End:
+#/* $end ncopy-ys */
